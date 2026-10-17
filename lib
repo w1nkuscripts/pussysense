@@ -284,6 +284,8 @@ function Library:CreateWindow(config)
     local LeftColX = 14
     local RightColX = 14 + ColWidth + 10
 
+    local ActiveTextbox = nil
+
     local function HideItem(it)
         it.AbsX, it.AbsY = nil, nil
         if it.Type == "Checkbox" then
@@ -298,6 +300,8 @@ function Library:CreateWindow(config)
             end
         elseif it.Type == "Button" then
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = false, false, false, false
+        elseif it.Type == "Textbox" then
+            it.LblTxt.Visible, it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.ValTxt.Visible = false, false, false, false, false
         elseif it.Type == "ColorPicker" then
             it.BoxX = nil
             it.Txt.Visible = false
@@ -474,6 +478,34 @@ function Library:CreateWindow(config)
                         it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = true, true, true, true
                     else
                         it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = false, false, false, false
+                    end
+                    itemY = itemY + it.Height + 4
+
+                elseif it.Type == "Textbox" then
+                    local boxY = iy + 15
+                    if isItemVisible then
+                        it.LblTxt.Position = Vector2.new(ix, iy)
+                        it.LblTxt.Visible  = true
+                        it.BoxOut.Position = Vector2.new(ix, boxY)
+                        it.BoxOut.Size     = Vector2.new(iw, 18)
+                        it.BoxIn.Position  = Vector2.new(ix + 1, boxY + 1)
+                        it.BoxIn.Size      = Vector2.new(iw - 2, 16)
+                        it.BoxBg.Position  = Vector2.new(ix + 2, boxY + 2)
+                        it.BoxBg.Size      = Vector2.new(iw - 4, 14)
+
+                        local displayStr = it.Text
+                        if it.Focused then
+                            displayStr = displayStr .. "_"
+                        elseif #displayStr == 0 then
+                            displayStr = "enter name..."
+                        end
+                        it.ValTxt.Text = displayStr
+                        it.ValTxt.Color = (it.Focused or #it.Text > 0) and Library.Theme.TextWhite or Library.Theme.TextDim
+                        it.ValTxt.Position = Vector2.new(ix + 6, boxY + 1)
+
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.ValTxt.Visible = true, true, true, true
+                    else
+                        it.LblTxt.Visible, it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.ValTxt.Visible = false, false, false, false, false
                     end
                     itemY = itemY + it.Height + 4
 
@@ -661,12 +693,10 @@ function Library:CreateWindow(config)
     local function UpdateTabsGeometry()
         local totalW = 0
         local tabSpacing = 24
-        
+
         for _, t in ipairs(Window.Tabs) do
             local textW = math.floor(t.Item.TextBounds.X)
-            if textW <= 0 then 
-                textW = #t.Name * 7 
-            end
+            if textW <= 0 then textW = #t.Name * 7 end
             t.W = textW
             totalW = totalW + t.W
         end
@@ -736,6 +766,13 @@ function Library:CreateWindow(config)
         elseif it.Type == "Button" then
             if IsMouseOver(mPos, it.AbsX, it.AbsY + 2, it.AbsW, 20) then
                 if it.Callback then it.Callback() end
+                return true
+            end
+        elseif it.Type == "Textbox" then
+            if IsMouseOver(mPos, it.AbsX, it.AbsY + 14, it.AbsW, 20) then
+                it.Focused = true
+                ActiveTextbox = it
+                RefreshLayout()
                 return true
             end
         elseif it.Type == "ColorPicker" then
@@ -1019,6 +1056,20 @@ function Library:CreateWindow(config)
                 return item
             end
 
+            function SecObj:AddTextbox(label, defaultText, callback)
+                local item = {
+                    Type = "Textbox", Label = label, Text = defaultText or "", Focused = false, Height = 36, Callback = callback,
+                    LblTxt = NewDraw("Text",   { Text = label, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
+                    BoxOut = NewDraw("Square", { Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                    BoxIn  = NewDraw("Square", { Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                    BoxBg  = NewDraw("Square", { Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                    ValTxt = NewDraw("Text",   { Text = defaultText or "", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 })
+                }
+                table.insert(sec.Items, item)
+                RefreshLayout()
+                return item
+            end
+
             function SecObj:AddDropdown(label, options, defaultSelected, callback)
                 local item = {
                     Type = "Dropdown", Label = label, Options = options or {}, Selected = defaultSelected or options[1] or "",
@@ -1106,6 +1157,29 @@ function Library:CreateWindow(config)
     end)
 
     UserInputService.InputBegan:Connect(function(input)
+        if ActiveTextbox then
+            if input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.Escape then
+                ActiveTextbox.Focused = false
+                if ActiveTextbox.Callback then ActiveTextbox.Callback(ActiveTextbox.Text) end
+                ActiveTextbox = nil
+                RefreshLayout()
+                return
+            elseif input.KeyCode == Enum.KeyCode.Backspace then
+                ActiveTextbox.Text = ActiveTextbox.Text:sub(1, -2)
+                RefreshLayout()
+                return
+            elseif input.UserInputType == Enum.UserInputType.Keyboard then
+                local char = UserInputService:GetStringForKeyCode(input.KeyCode)
+                if char and #char > 0 then
+                    local isShift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+                    if not isShift then char = string.lower(char) end
+                    ActiveTextbox.Text = ActiveTextbox.Text .. char
+                    RefreshLayout()
+                    return
+                end
+            end
+        end
+
         if ListeningBindItem then
             local keyName = nil
             if input.UserInputType == Enum.UserInputType.Keyboard then
@@ -1171,6 +1245,13 @@ function Library:CreateWindow(config)
 
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             local mPos = GetExactMouse()
+
+            if ActiveTextbox and not IsMouseOver(mPos, ActiveTextbox.AbsX, ActiveTextbox.AbsY + 14, ActiveTextbox.AbsW, 20) then
+                ActiveTextbox.Focused = false
+                if ActiveTextbox.Callback then ActiveTextbox.Callback(ActiveTextbox.Text) end
+                ActiveTextbox = nil
+                RefreshLayout()
+            end
 
             if ColorMenuPopup.Visible then
                 if IsMouseOver(mPos, ColorMenuPopup.X, ColorMenuPopup.Y, ColorMenuPopup.W, ColorMenuPopup.H) then
