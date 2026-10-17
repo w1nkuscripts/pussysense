@@ -279,21 +279,25 @@ function Library:CreateWindow(config)
     end
 
     local ViewTop = 44
+    local ViewBottom = MenuH - 10
     local ColWidth = math.floor((MenuW - 38) / 2)
     local LeftColX = 14
     local RightColX = 14 + ColWidth + 10
 
     local function HideItem(it)
+        it.AbsX, it.AbsY = nil, nil
         if it.Type == "Checkbox" then
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = false, false, false, false
             if it.BindBtn then it.BindBtn.Visible = false end
             if it.Picker then
+                it.Picker.BoxX = nil
                 it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = false, false, false
             end
             if it.SubItems then
                 for _, sub in ipairs(it.SubItems) do HideItem(sub) end
             end
         elseif it.Type == "ColorPicker" then
+            it.BoxX = nil
             it.Txt.Visible = false
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible = false, false, false
         elseif it.Type == "Dropdown" then
@@ -301,6 +305,7 @@ function Library:CreateWindow(config)
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible = false, false, false
             it.ValTxt.Visible, it.ArrowTxt.Visible = false, false
             for _, opt in ipairs(it.OptItems) do
+                opt.AbsX = nil
                 opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = false, false, false, false
             end
             if it.ConditionalSubs then
@@ -313,12 +318,14 @@ function Library:CreateWindow(config)
             it.BtnMinusOut.Visible, it.BtnMinusIn.Visible, it.BtnMinusBg.Visible, it.BtnMinusTxt.Visible = false, false, false, false
             it.BtnPlusOut.Visible, it.BtnPlusIn.Visible, it.BtnPlusBg.Visible, it.BtnPlusTxt.Visible = false, false, false, false
             if it.Picker then
+                it.Picker.BoxX = nil
                 it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = false, false, false
             end
         end
     end
 
     local function HideSection(sec)
+        sec.AbsX, sec.AbsY = nil, nil
         sec.OutRect.Visible, sec.InRect.Visible, sec.BgRect.Visible, sec.TitleText.Visible = false, false, false, false
         for _, g in ipairs(sec.Glow) do g.Obj.Visible = false end
         for _, it in ipairs(sec.Items) do HideItem(it) end
@@ -338,8 +345,12 @@ function Library:CreateWindow(config)
         return h
     end
 
-    local function RenderSide(sideList)
-        local curY = ViewTop
+    -- РЕНДЕРИНГ СТОРОНЫ С ПОДДЕРЖКОЙ СКРОЛЛА И КЛИППИНГА
+    local function RenderSide(sideList, scrollOffset)
+        local clipTop = MenuY + ViewTop
+        local clipBottom = MenuY + ViewBottom
+        local curY = ViewTop - (scrollOffset or 0)
+
         for _, sec in ipairs(sideList) do
             local secH = 28
             for _, it in ipairs(sec.Items) do
@@ -352,22 +363,32 @@ function Library:CreateWindow(config)
             sec.AbsX, sec.AbsY = absX, absY
             sec.H = secH
 
-            sec.OutRect.Position = Vector2.new(absX, absY)
-            sec.OutRect.Size     = Vector2.new(sec.W, secH)
-            sec.InRect.Position  = Vector2.new(absX + 1, absY + 1)
-            sec.InRect.Size      = Vector2.new(sec.W - 2, secH - 2)
-            sec.BgRect.Position  = Vector2.new(absX + 2, absY + 2)
-            sec.BgRect.Size      = Vector2.new(sec.W - 4, secH - 4)
+            -- Проверка: видна ли секция в области окна
+            local isSecVisible = (absY + secH > clipTop) and (absY < clipBottom)
 
-            sec.OutRect.Visible, sec.InRect.Visible, sec.BgRect.Visible = true, true, true
+            if isSecVisible then
+                sec.OutRect.Position = Vector2.new(absX, absY)
+                sec.OutRect.Size     = Vector2.new(sec.W, secH)
+                sec.InRect.Position  = Vector2.new(absX + 1, absY + 1)
+                sec.InRect.Size      = Vector2.new(sec.W - 2, secH - 2)
+                sec.BgRect.Position  = Vector2.new(absX + 2, absY + 2)
+                sec.BgRect.Size      = Vector2.new(sec.W - 4, secH - 4)
 
-            for _, g in ipairs(sec.Glow) do
-                g.Obj.Position = Vector2.new(absX + sec.GlowRelOffsetX + g.RelX, absY + 2)
-                g.Obj.Visible = true
+                sec.OutRect.Visible, sec.InRect.Visible, sec.BgRect.Visible = true, true, true
+
+                local glowVis = (absY >= clipTop - 5) and (absY <= clipBottom)
+                for _, g in ipairs(sec.Glow) do
+                    g.Obj.Position = Vector2.new(absX + sec.GlowRelOffsetX + g.RelX, absY + 2)
+                    g.Obj.Visible = glowVis
+                end
+
+                local titleVis = (absY + 8 >= clipTop) and (absY + 24 <= clipBottom)
+                sec.TitleText.Position = Vector2.new(absX + 10, absY + 8)
+                sec.TitleText.Visible = titleVis
+            else
+                sec.OutRect.Visible, sec.InRect.Visible, sec.BgRect.Visible, sec.TitleText.Visible = false, false, false, false
+                for _, g in ipairs(sec.Glow) do g.Obj.Visible = false end
             end
-
-            sec.TitleText.Position = Vector2.new(absX + 10, absY + 8)
-            sec.TitleText.Visible = true
 
             local itemY = absY + 28
 
@@ -377,42 +398,54 @@ function Library:CreateWindow(config)
                 local iw = sec.W - 20 - indent
                 it.AbsX, it.AbsY, it.AbsW = ix, iy, iw
 
+                local itemTotalH = it.Height + 4
+                local isItemVisible = isSecVisible and (iy >= clipTop) and (iy + itemTotalH <= clipBottom + 4)
+
                 if it.Type == "Checkbox" then
-                    local bSz = it.IsSub and 10 or 12
-                    it.BoxOut.Position  = Vector2.new(ix, iy + 3)
-                    it.BoxOut.Size      = Vector2.new(bSz, bSz)
-                    it.BoxIn.Position   = Vector2.new(ix + 1, iy + 4)
-                    it.BoxIn.Size       = Vector2.new(bSz - 2, bSz - 2)
-                    it.BoxFill.Position = Vector2.new(ix + 2, iy + 5)
-                    it.BoxFill.Size     = Vector2.new(bSz - 4, bSz - 4)
-                    it.Txt.Position     = Vector2.new(ix + bSz + 6, iy + 1)
-                    it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = true, true, true, true
+                    if isItemVisible then
+                        local bSz = it.IsSub and 10 or 12
+                        it.BoxOut.Position  = Vector2.new(ix, iy + 3)
+                        it.BoxOut.Size      = Vector2.new(bSz, bSz)
+                        it.BoxIn.Position   = Vector2.new(ix + 1, iy + 4)
+                        it.BoxIn.Size       = Vector2.new(bSz - 2, bSz - 2)
+                        it.BoxFill.Position = Vector2.new(ix + 2, iy + 5)
+                        it.BoxFill.Size     = Vector2.new(bSz - 4, bSz - 4)
+                        it.Txt.Position     = Vector2.new(ix + bSz + 6, iy + 1)
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = true, true, true, true
 
-                    local rightEdge = ix + iw
+                        local rightEdge = ix + iw
 
-                    if it.Picker then
-                        local pw, ph = 18, 10
-                        local px = rightEdge - pw
-                        it.Picker.BoxOut.Position  = Vector2.new(px, iy + 4)
-                        it.Picker.BoxOut.Size      = Vector2.new(pw, ph)
-                        it.Picker.BoxIn.Position   = Vector2.new(px + 1, iy + 5)
-                        it.Picker.BoxIn.Size       = Vector2.new(pw - 2, ph - 2)
-                        it.Picker.BoxFill.Position = Vector2.new(px + 2, iy + 6)
-                        it.Picker.BoxFill.Size     = Vector2.new(pw - 4, ph - 4)
-                        it.Picker.BoxX, it.Picker.BoxY, it.Picker.BoxW, it.Picker.BoxH = px, iy + 4, pw, ph
-                        it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = true, true, true
-                        rightEdge = px - 6
-                    end
+                        if it.Picker then
+                            local pw, ph = 18, 10
+                            local px = rightEdge - pw
+                            it.Picker.BoxOut.Position  = Vector2.new(px, iy + 4)
+                            it.Picker.BoxOut.Size      = Vector2.new(pw, ph)
+                            it.Picker.BoxIn.Position   = Vector2.new(px + 1, iy + 5)
+                            it.Picker.BoxIn.Size       = Vector2.new(pw - 2, ph - 2)
+                            it.Picker.BoxFill.Position = Vector2.new(px + 2, iy + 6)
+                            it.Picker.BoxFill.Size     = Vector2.new(pw - 4, ph - 4)
+                            it.Picker.BoxX, it.Picker.BoxY, it.Picker.BoxW, it.Picker.BoxH = px, iy + 4, pw, ph
+                            it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = true, true, true
+                            rightEdge = px - 6
+                        end
 
-                    if it.HasBind and it.BindBtn then
-                        local bText = it.Listening and "[ ... ]" or ("[ " .. FormatKeyName(it.BindKey) .. " ]")
-                        it.BindBtn.Text = bText
-                        local bw = math.max(24, math.floor(it.BindBtn.TextBounds.X))
-                        local bx = rightEdge - bw
-                        it.BindBtn.Position = Vector2.new(bx, iy + 1)
-                        it.BindBtnX, it.BindBtnY, it.BindBtnW, it.BindBtnH = bx, iy + 1, bw, 16
-                        it.BindBtn.Color = it.Listening and Library.Theme.TextActive or Library.Theme.TextDim
-                        it.BindBtn.Visible = true
+                        if it.HasBind and it.BindBtn then
+                            local bText = it.Listening and "[ ... ]" or ("[ " .. FormatKeyName(it.BindKey) .. " ]")
+                            it.BindBtn.Text = bText
+                            local bw = math.max(24, math.floor(it.BindBtn.TextBounds.X))
+                            local bx = rightEdge - bw
+                            it.BindBtn.Position = Vector2.new(bx, iy + 1)
+                            it.BindBtnX, it.BindBtnY, it.BindBtnW, it.BindBtnH = bx, iy + 1, bw, 16
+                            it.BindBtn.Color = it.Listening and Library.Theme.TextActive or Library.Theme.TextDim
+                            it.BindBtn.Visible = true
+                        end
+                    else
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = false, false, false, false
+                        if it.BindBtn then it.BindBtn.Visible = false end
+                        if it.Picker then
+                            it.Picker.BoxX = nil
+                            it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = false, false, false
+                        end
                     end
 
                     itemY = itemY + it.Height + 4
@@ -426,48 +459,71 @@ function Library:CreateWindow(config)
                     end
 
                 elseif it.Type == "ColorPicker" then
-                    it.Txt.Position = Vector2.new(ix, iy + 1)
-                    it.Txt.Visible  = true
-                    local bw, bh = 20, 12
-                    local bx = ix + iw - bw
-                    it.BoxOut.Position  = Vector2.new(bx, iy + 3)
-                    it.BoxIn.Position   = Vector2.new(bx + 1, iy + 4)
-                    it.BoxFill.Position = Vector2.new(bx + 2, iy + 5)
-                    it.BoxX, it.BoxY, it.BoxW, it.BoxH = bx, iy + 3, bw, bh
-                    it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible = true, true, true
+                    if isItemVisible then
+                        it.Txt.Position = Vector2.new(ix, iy + 1)
+                        it.Txt.Visible  = true
+                        local bw, bh = 20, 12
+                        local bx = ix + iw - bw
+                        it.BoxOut.Position  = Vector2.new(bx, iy + 3)
+                        it.BoxIn.Position   = Vector2.new(bx + 1, iy + 4)
+                        it.BoxFill.Position = Vector2.new(bx + 2, iy + 5)
+                        it.BoxX, it.BoxY, it.BoxW, it.BoxH = bx, iy + 3, bw, bh
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible = true, true, true
+                    else
+                        it.BoxX = nil
+                        it.Txt.Visible = false
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible = false, false, false
+                    end
                     itemY = itemY + it.Height + 4
 
                 elseif it.Type == "Dropdown" then
-                    it.LblTxt.Position = Vector2.new(ix, iy)
-                    it.LblTxt.Visible  = true
                     local boxY = iy + 15
-                    it.BoxOut.Position = Vector2.new(ix, boxY)
-                    it.BoxOut.Size     = Vector2.new(iw, 18)
-                    it.BoxIn.Position  = Vector2.new(ix + 1, boxY + 1)
-                    it.BoxIn.Size      = Vector2.new(iw - 2, 16)
-                    it.BoxBg.Position  = Vector2.new(ix + 2, boxY + 2)
-                    it.BoxBg.Size      = Vector2.new(iw - 4, 14)
-                    it.ValTxt.Text     = it.Selected
-                    it.ValTxt.Position = Vector2.new(ix + 6, boxY + 1)
-                    it.ArrowTxt.Text   = it.Open and "^" or "v"
-                    it.ArrowTxt.Position = Vector2.new(ix + iw - 12, boxY + 1)
-                    it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible = true, true, true
-                    it.ValTxt.Visible, it.ArrowTxt.Visible = true, true
+                    if isItemVisible then
+                        it.LblTxt.Position = Vector2.new(ix, iy)
+                        it.LblTxt.Visible  = true
+                        it.BoxOut.Position = Vector2.new(ix, boxY)
+                        it.BoxOut.Size     = Vector2.new(iw, 18)
+                        it.BoxIn.Position  = Vector2.new(ix + 1, boxY + 1)
+                        it.BoxIn.Size      = Vector2.new(iw - 2, 16)
+                        it.BoxBg.Position  = Vector2.new(ix + 2, boxY + 2)
+                        it.BoxBg.Size      = Vector2.new(iw - 4, 14)
+                        it.ValTxt.Text     = it.Selected
+                        it.ValTxt.Position = Vector2.new(ix + 6, boxY + 1)
+                        it.ArrowTxt.Text   = it.Open and "^" or "v"
+                        it.ArrowTxt.Position = Vector2.new(ix + iw - 12, boxY + 1)
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible = true, true, true
+                        it.ValTxt.Visible, it.ArrowTxt.Visible = true, true
 
-                    for oIdx, opt in ipairs(it.OptItems) do
-                        if it.Open then
-                            local oy = boxY + 18 + (oIdx - 1) * 16
-                            opt.AbsX, opt.AbsY, opt.AbsW, opt.AbsH = ix, oy, iw, 16
-                            opt.Out.Position = Vector2.new(ix, oy)
-                            opt.Out.Size     = Vector2.new(iw, 16)
-                            opt.In.Position  = Vector2.new(ix + 1, oy + 1)
-                            opt.In.Size      = Vector2.new(iw - 2, 14)
-                            opt.Bg.Position  = Vector2.new(ix + 2, oy + 2)
-                            opt.Bg.Size      = Vector2.new(iw - 4, 12)
-                            opt.Txt.Position = Vector2.new(ix + 6, oy)
-                            opt.Txt.Color    = (opt.Name == it.Selected) and Library.Theme.TextActive or Library.Theme.TextDim
-                            opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = true, true, true, true
-                        else
+                        for oIdx, opt in ipairs(it.OptItems) do
+                            if it.Open then
+                                local oy = boxY + 18 + (oIdx - 1) * 16
+                                local isOptVis = (oy >= clipTop) and (oy + 16 <= clipBottom + 10)
+                                if isOptVis then
+                                    opt.AbsX, opt.AbsY, opt.AbsW, opt.AbsH = ix, oy, iw, 16
+                                    opt.Out.Position = Vector2.new(ix, oy)
+                                    opt.Out.Size     = Vector2.new(iw, 16)
+                                    opt.In.Position  = Vector2.new(ix + 1, oy + 1)
+                                    opt.In.Size      = Vector2.new(iw - 2, 14)
+                                    opt.Bg.Position  = Vector2.new(ix + 2, oy + 2)
+                                    opt.Bg.Size      = Vector2.new(iw - 4, 12)
+                                    opt.Txt.Position = Vector2.new(ix + 6, oy)
+                                    opt.Txt.Color    = (opt.Name == it.Selected) and Library.Theme.TextActive or Library.Theme.TextDim
+                                    opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = true, true, true, true
+                                else
+                                    opt.AbsX = nil
+                                    opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = false, false, false, false
+                                end
+                            else
+                                opt.AbsX = nil
+                                opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = false, false, false, false
+                            end
+                        end
+                    else
+                        it.LblTxt.Visible = false
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible = false, false, false
+                        it.ValTxt.Visible, it.ArrowTxt.Visible = false, false
+                        for _, opt in ipairs(it.OptItems) do
+                            opt.AbsX = nil
                             opt.Out.Visible, opt.In.Visible, opt.Bg.Visible, opt.Txt.Visible = false, false, false, false
                         end
                     end
@@ -487,50 +543,58 @@ function Library:CreateWindow(config)
                     end
 
                 elseif it.Type == "Slider" then
-                    it.Txt.Position    = Vector2.new(ix, iy)
-                    local vw = math.max(14, math.floor(it.ValTxt.TextBounds.X))
-                    local rightEdge = ix + iw
+                    if isItemVisible then
+                        it.Txt.Position    = Vector2.new(ix, iy)
+                        local vw = math.max(14, math.floor(it.ValTxt.TextBounds.X))
+                        local rightEdge = ix + iw
 
-                    if it.Picker then
-                        local pw, ph = 18, 10
-                        local px = rightEdge - pw
-                        it.Picker.BoxOut.Position  = Vector2.new(px, iy + 2)
-                        it.Picker.BoxOut.Size      = Vector2.new(pw, ph)
-                        it.Picker.BoxIn.Position   = Vector2.new(px + 1, iy + 3)
-                        it.Picker.BoxIn.Size       = Vector2.new(pw - 2, ph - 2)
-                        it.Picker.BoxFill.Position = Vector2.new(px + 2, iy + 4)
-                        it.Picker.BoxFill.Size     = Vector2.new(pw - 4, ph - 4)
-                        it.Picker.BoxX, it.Picker.BoxY, it.Picker.BoxW, it.Picker.BoxH = px, iy + 2, pw, ph
-                        it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = true, true, true
-                        rightEdge = px - 6
+                        if it.Picker then
+                            local pw, ph = 18, 10
+                            local px = rightEdge - pw
+                            it.Picker.BoxOut.Position  = Vector2.new(px, iy + 2)
+                            it.Picker.BoxOut.Size      = Vector2.new(pw, ph)
+                            it.Picker.BoxIn.Position   = Vector2.new(px + 1, iy + 3)
+                            it.Picker.BoxIn.Size       = Vector2.new(pw - 2, ph - 2)
+                            it.Picker.BoxFill.Position = Vector2.new(px + 2, iy + 4)
+                            it.Picker.BoxFill.Size     = Vector2.new(pw - 4, ph - 4)
+                            it.Picker.BoxX, it.Picker.BoxY, it.Picker.BoxW, it.Picker.BoxH = px, iy + 2, pw, ph
+                            it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = true, true, true
+                            rightEdge = px - 6
+                        end
+
+                        it.ValTxt.Position = Vector2.new(rightEdge - vw, iy)
+
+                        local btnY = iy + 14
+                        local barX = ix + 18
+                        local barW = iw - 36
+                        local barY = btnY + 3
+                        it.BtnMinusOut.Position = Vector2.new(ix, btnY)
+                        it.BtnMinusIn.Position  = Vector2.new(ix + 1, btnY + 1)
+                        it.BtnMinusBg.Position  = Vector2.new(ix + 2, btnY + 2)
+                        it.BtnMinusTxt.Position = Vector2.new(ix + 7, btnY)
+                        it.BarOut.Position = Vector2.new(barX, barY)
+                        it.BarOut.Size     = Vector2.new(barW, 8)
+                        it.BarIn.Position  = Vector2.new(barX + 1, barY + 1)
+                        it.BarIn.Size      = Vector2.new(barW - 2, 6)
+                        local pct = math.clamp((it.Val - it.Min) / (it.Max - it.Min), 0, 1)
+                        it.BarFill.Position = Vector2.new(barX + 1, barY + 1)
+                        it.BarFill.Size     = Vector2.new(math.max(1, math.floor((barW - 2) * pct)), 6)
+                        local plusX = ix + iw - 14
+                        it.BtnPlusOut.Position = Vector2.new(plusX, btnY)
+                        it.BtnPlusIn.Position  = Vector2.new(plusX + 1, btnY + 1)
+                        it.BtnPlusBg.Position  = Vector2.new(plusX + 2, btnY + 2)
+                        it.BtnPlusTxt.Position = Vector2.new(plusX + 7, btnY)
+                        it.Txt.Visible, it.ValTxt.Visible = true, true
+                        it.BtnMinusOut.Visible, it.BtnMinusIn.Visible, it.BtnMinusBg.Visible, it.BtnMinusTxt.Visible = true, true, true, true
+                        it.BarOut.Visible, it.BarIn.Visible, it.BarFill.Visible = true, true, true
+                        it.BtnPlusOut.Visible, it.BtnPlusIn.Visible, it.BtnPlusBg.Visible, it.BtnPlusTxt.Visible = true, true, true, true
+                    else
+                        if it.Picker then it.Picker.BoxX = nil end
+                        it.Txt.Visible, it.ValTxt.Visible = false, false
+                        it.BtnMinusOut.Visible, it.BtnMinusIn.Visible, it.BtnMinusBg.Visible, it.BtnMinusTxt.Visible = false, false, false, false
+                        it.BarOut.Visible, it.BarIn.Visible, it.BarFill.Visible = false, false, false
+                        it.BtnPlusOut.Visible, it.BtnPlusIn.Visible, it.BtnPlusBg.Visible, it.BtnPlusTxt.Visible = false, false, false, false
                     end
-
-                    it.ValTxt.Position = Vector2.new(rightEdge - vw, iy)
-
-                    local btnY = iy + 14
-                    local barX = ix + 18
-                    local barW = iw - 36
-                    local barY = btnY + 3
-                    it.BtnMinusOut.Position = Vector2.new(ix, btnY)
-                    it.BtnMinusIn.Position  = Vector2.new(ix + 1, btnY + 1)
-                    it.BtnMinusBg.Position  = Vector2.new(ix + 2, btnY + 2)
-                    it.BtnMinusTxt.Position = Vector2.new(ix + 7, btnY)
-                    it.BarOut.Position = Vector2.new(barX, barY)
-                    it.BarOut.Size     = Vector2.new(barW, 8)
-                    it.BarIn.Position  = Vector2.new(barX + 1, barY + 1)
-                    it.BarIn.Size      = Vector2.new(barW - 2, 6)
-                    local pct = math.clamp((it.Val - it.Min) / (it.Max - it.Min), 0, 1)
-                    it.BarFill.Position = Vector2.new(barX + 1, barY + 1)
-                    it.BarFill.Size     = Vector2.new(math.max(1, math.floor((barW - 2) * pct)), 6)
-                    local plusX = ix + iw - 14
-                    it.BtnPlusOut.Position = Vector2.new(plusX, btnY)
-                    it.BtnPlusIn.Position  = Vector2.new(plusX + 1, btnY + 1)
-                    it.BtnPlusBg.Position  = Vector2.new(plusX + 2, btnY + 2)
-                    it.BtnPlusTxt.Position = Vector2.new(plusX + 7, btnY)
-                    it.Txt.Visible, it.ValTxt.Visible = true, true
-                    it.BtnMinusOut.Visible, it.BtnMinusIn.Visible, it.BtnMinusBg.Visible, it.BtnMinusTxt.Visible = true, true, true, true
-                    it.BarOut.Visible, it.BarIn.Visible, it.BarFill.Visible = true, true, true
-                    it.BtnPlusOut.Visible, it.BtnPlusIn.Visible, it.BtnPlusBg.Visible, it.BtnPlusTxt.Visible = true, true, true, true
                     itemY = itemY + it.Height + 4
                 end
             end
@@ -542,6 +606,18 @@ function Library:CreateWindow(config)
         end
     end
 
+    local function CalculateContentHeight(sideList)
+        local h = 0
+        for _, sec in ipairs(sideList) do
+            local secH = 28
+            for _, it in ipairs(sec.Items) do
+                secH = secH + GetItemTotalHeight(it)
+            end
+            h = h + secH + 6 + 8
+        end
+        return h
+    end
+
     local function RefreshLayout()
         for tabName, p in pairs(Window.Pages) do
             if tabName ~= Window.ActiveTab then
@@ -551,8 +627,15 @@ function Library:CreateWindow(config)
         end
         local curPage = Window.Pages[Window.ActiveTab]
         if curPage then
-            RenderSide(curPage.Left)
-            RenderSide(curPage.Right)
+            local availableH = ViewBottom - ViewTop
+            local maxLeftScroll = math.max(0, CalculateContentHeight(curPage.Left) - availableH)
+            local maxRightScroll = math.max(0, CalculateContentHeight(curPage.Right) - availableH)
+
+            curPage.ScrollLeft = math.clamp(curPage.ScrollLeft or 0, 0, maxLeftScroll)
+            curPage.ScrollRight = math.clamp(curPage.ScrollRight or 0, 0, maxRightScroll)
+
+            RenderSide(curPage.Left, curPage.ScrollLeft)
+            RenderSide(curPage.Right, curPage.ScrollRight)
         end
     end
 
@@ -583,6 +666,8 @@ function Library:CreateWindow(config)
     local ListeningBindItem = nil
 
     local function HandleItemInteraction(mPos, it)
+        if it.AbsX == nil then return false end
+
         if it.Type == "Checkbox" then
             if it.Picker and it.Picker.BoxX and IsMouseOver(mPos, it.Picker.BoxX - 2, it.Picker.BoxY - 2, it.Picker.BoxW + 4, it.Picker.BoxH + 4) then
                 CloseBindPopup()
@@ -660,6 +745,8 @@ function Library:CreateWindow(config)
     end
 
     local function HandleRightClickInteraction(mPos, it)
+        if it.AbsX == nil then return false end
+
         if it.Type == "Checkbox" then
             if it.HasBind and it.BindBtnX and IsMouseOver(mPos, it.BindBtnX - 4, it.BindBtnY - 2, it.BindBtnW + 8, it.BindBtnH + 4) then
                 CloseColorPicker()
@@ -708,7 +795,7 @@ function Library:CreateWindow(config)
         local bw = math.max(#tabName * 7, math.floor(btn.TextBounds.X))
         local tabData = { Name = tabName, Item = btn, RelX = 0, RelY = 14, W = bw, H = 18 }
         table.insert(Window.Tabs, tabData)
-        Window.Pages[tabName] = { Left = {}, Right = {} }
+        Window.Pages[tabName] = { Left = {}, Right = {}, ScrollLeft = 0, ScrollRight = 0 }
 
         UpdateTabsGeometry()
 
@@ -945,6 +1032,26 @@ function Library:CreateWindow(config)
         end
         return TabObj
     end
+
+    -- ОБРАБОТЧИК СКРОЛЛА КОЛЕСИКОМ МЫШИ
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseWheel then
+            local mPos = GetExactMouse()
+            local curPage = Window.Pages[Window.ActiveTab]
+            if curPage and IsMouseOver(mPos, MenuX, MenuY + ViewTop, MenuW, ViewBottom - ViewTop) then
+                local scrollSpeed = 24
+                local delta = -input.Position.Z * scrollSpeed
+                local isRightSide = (mPos.X > MenuX + LeftColX + ColWidth)
+
+                if isRightSide then
+                    curPage.ScrollRight = (curPage.ScrollRight or 0) + delta
+                else
+                    curPage.ScrollLeft = (curPage.ScrollLeft or 0) + delta
+                end
+                RefreshLayout()
+            end
+        end
+    end)
 
     UserInputService.InputBegan:Connect(function(input)
         if ListeningBindItem then
