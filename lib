@@ -459,7 +459,7 @@ function Library:CreateWindow(config)
                             DrawItemRecursive(sub, indent + 12)
                         end
                     elseif it.SubItems then
-                        for _, sub in ipairs(subList or it.SubItems) do HideItem(sub) end
+                        for _, sub in ipairs(it.SubItems) do HideItem(sub) end
                     end
 
                 elseif it.Type == "Button" then
@@ -660,19 +660,31 @@ function Library:CreateWindow(config)
 
     local function UpdateTabsGeometry()
         local totalW = 0
-        local tabSpacing = 22
-        for _, t in ipairs(Window.Tabs) do totalW = totalW + t.W end
+        local tabSpacing = 24
+        
+        for _, t in ipairs(Window.Tabs) do
+            local textW = math.floor(t.Item.TextBounds.X)
+            if textW <= 0 then 
+                textW = #t.Name * 7 
+            end
+            t.W = textW
+            totalW = totalW + t.W
+        end
         totalW = totalW + tabSpacing * (#Window.Tabs - 1)
 
-        local startAreaX = 160
-        local availableW = MenuW - startAreaX - 20
-        local curX = startAreaX + math.floor((availableW - totalW) / 2)
+        local leftBound = 120
+        local rightBound = MenuW - 20
+        local availableSpace = rightBound - leftBound
 
+        local startX = leftBound + math.floor((availableSpace - totalW) / 2)
+
+        local curX = startX
         for _, t in ipairs(Window.Tabs) do
             t.RelX = curX
             t.Item.Position = Vector2.new(MenuX + curX, MenuY + 14)
             curX = curX + t.W + tabSpacing
         end
+
         if Window.ActiveTab then
             for _, t in ipairs(Window.Tabs) do
                 if t.Name == Window.ActiveTab then
