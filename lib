@@ -87,7 +87,7 @@ function Library:CreateWindow(config)
     end
 
     local topBorderGlow  = CreateHorizontalGlow(35, 1, MenuW - 70, 1, 6)
-    local botBorderGlow  = CreateHorizontalGlow(35, MenuH - 2, MenuW - 70, 1, 25) -- ZIndex 25 поверх секций
+    local botBorderGlow  = CreateHorizontalGlow(35, MenuH - 2, MenuW - 70, 1, 25)
     local mainHeaderGlow = CreateHorizontalGlow(14, 35, MenuW - 28, 1, 6)
     local headerSep = NewDraw("Square", { Position = Vector2.new(MenuX + 14, MenuY + 36), Size = Vector2.new(MenuW - 28, 1), Color = Library.Theme.InnerBorder, Filled = true, Visible = true, ZIndex = 5 })
 
@@ -278,9 +278,8 @@ function Library:CreateWindow(config)
         end
     end
 
-    -- Границы области видимости контента
     local ViewTop = 44
-    local ViewBottom = MenuH - 16 -- Безопасный отступ от нижнего края
+    local ViewBottom = MenuH - 16
     local ColWidth = math.floor((MenuW - 38) / 2)
     local LeftColX = 14
     local RightColX = 14 + ColWidth + 10
@@ -297,6 +296,8 @@ function Library:CreateWindow(config)
             if it.SubItems then
                 for _, sub in ipairs(it.SubItems) do HideItem(sub) end
             end
+        elseif it.Type == "Button" then
+            it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = false, false, false, false
         elseif it.Type == "ColorPicker" then
             it.BoxX = nil
             it.Txt.Visible = false
@@ -346,7 +347,6 @@ function Library:CreateWindow(config)
         return h
     end
 
-    -- РЕНДЕРИНГ С ДИНАМИЧЕСКИМ СРЕЗОМ РАМОК СЕКЦИЙ
     local function RenderSide(sideList, scrollOffset)
         local clipTop = MenuY + ViewTop
         local clipBottom = MenuY + ViewBottom
@@ -364,7 +364,6 @@ function Library:CreateWindow(config)
             sec.AbsX, sec.AbsY = absX, absY
             sec.H = secH
 
-            -- Вычисляем реальную видимую высоту рамки секции
             local renderTop = math.max(absY, clipTop)
             local renderBottom = math.min(absY + secH, clipBottom)
             local renderHeight = renderBottom - renderTop
@@ -404,7 +403,6 @@ function Library:CreateWindow(config)
                 it.AbsX, it.AbsY, it.AbsW = ix, iy, iw
 
                 local itemTotalH = it.Height + 4
-                -- Строго проверяем, чтобы элемент не выступал за нижний срез
                 local isItemVisible = isSecVisible and (iy >= clipTop) and (iy + itemTotalH <= clipBottom - 2)
 
                 if it.Type == "Checkbox" then
@@ -461,8 +459,23 @@ function Library:CreateWindow(config)
                             DrawItemRecursive(sub, indent + 12)
                         end
                     elseif it.SubItems then
-                        for _, sub in ipairs(it.SubItems) do HideItem(sub) end
+                        for _, sub in ipairs(subList or it.SubItems) do HideItem(sub) end
                     end
+
+                elseif it.Type == "Button" then
+                    if isItemVisible then
+                        it.BoxOut.Position = Vector2.new(ix, iy + 2)
+                        it.BoxOut.Size     = Vector2.new(iw, 20)
+                        it.BoxIn.Position  = Vector2.new(ix + 1, iy + 3)
+                        it.BoxIn.Size      = Vector2.new(iw - 2, 18)
+                        it.BoxBg.Position  = Vector2.new(ix + 2, iy + 4)
+                        it.BoxBg.Size      = Vector2.new(iw - 4, 16)
+                        it.Txt.Position    = Vector2.new(ix + math.floor(iw / 2), iy + 4)
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = true, true, true, true
+                    else
+                        it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = false, false, false, false
+                    end
+                    itemY = itemY + it.Height + 4
 
                 elseif it.Type == "ColorPicker" then
                     if isItemVisible then
@@ -647,10 +660,14 @@ function Library:CreateWindow(config)
 
     local function UpdateTabsGeometry()
         local totalW = 0
-        local tabSpacing = 28
+        local tabSpacing = 22
         for _, t in ipairs(Window.Tabs) do totalW = totalW + t.W end
         totalW = totalW + tabSpacing * (#Window.Tabs - 1)
-        local curX = math.floor((MenuW - totalW) / 2) + 20
+
+        local startAreaX = 160
+        local availableW = MenuW - startAreaX - 20
+        local curX = startAreaX + math.floor((availableW - totalW) / 2)
+
         for _, t in ipairs(Window.Tabs) do
             t.RelX = curX
             t.Item.Position = Vector2.new(MenuX + curX, MenuY + 14)
@@ -703,6 +720,11 @@ function Library:CreateWindow(config)
                 for _, sub in ipairs(it.SubItems) do
                     if HandleItemInteraction(mPos, sub) then return true end
                 end
+            end
+        elseif it.Type == "Button" then
+            if IsMouseOver(mPos, it.AbsX, it.AbsY + 2, it.AbsW, 20) then
+                if it.Callback then it.Callback() end
+                return true
             end
         elseif it.Type == "ColorPicker" then
             if it.BoxX and IsMouseOver(mPos, it.BoxX - 2, it.BoxY - 2, it.BoxW + 4, it.BoxH + 4) then
@@ -972,6 +994,19 @@ function Library:CreateWindow(config)
                 return item
             end
 
+            function SecObj:AddButton(label, callback)
+                local item = {
+                    Type = "Button", Label = label, Height = 22, Callback = callback,
+                    BoxOut = NewDraw("Square", { Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                    BoxIn  = NewDraw("Square", { Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                    BoxBg  = NewDraw("Square", { Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                    Txt    = NewDraw("Text",   { Text = label, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 17 })
+                }
+                table.insert(sec.Items, item)
+                RefreshLayout()
+                return item
+            end
+
             function SecObj:AddDropdown(label, options, defaultSelected, callback)
                 local item = {
                     Type = "Dropdown", Label = label, Options = options or {}, Selected = defaultSelected or options[1] or "",
@@ -1039,7 +1074,6 @@ function Library:CreateWindow(config)
         return TabObj
     end
 
-    -- СКРОЛЛ КОЛЕСИКОМ МЫШИ
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseWheel then
             local mPos = GetExactMouse()
