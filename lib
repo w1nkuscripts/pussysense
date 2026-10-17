@@ -54,7 +54,7 @@ function Library:CreateWindow(config)
     local TitleSecond = config.TitleSecond or "Sense"
 
     local MenuX, MenuY = 220, 80
-    local MenuW, MenuH = 580, 440
+    local MenuW, MenuH = 580, 460
 
     local Window = {
         X = MenuX,
@@ -298,6 +298,11 @@ function Library:CreateWindow(config)
         if it.Type == "Checkbox" then
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = false, false, false, false
             if it.BindBtn then it.BindBtn.Visible = false end
+            if it.Picker then
+                it.Picker.BoxOut.Visible = false
+                it.Picker.BoxIn.Visible = false
+                it.Picker.BoxFill.Visible = false
+            end
             if it.SubItems then
                 for _, sub in ipairs(it.SubItems) do HideItem(sub) end
             end
@@ -380,11 +385,32 @@ function Library:CreateWindow(config)
                     it.Txt.Position     = Vector2.new(ix + bSz + 6, iy + 1)
                     it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = true, true, true, true
 
+                    local rightEdge = ix + iw
+
+                    if it.Picker then
+                        local pw, ph = 18, 10
+                        local px = rightEdge - pw
+                        it.Picker.BoxOut.Position  = Vector2.new(px, iy + 4)
+                        it.Picker.BoxOut.Size      = Vector2.new(pw, ph)
+                        it.Picker.BoxIn.Position   = Vector2.new(px + 1, iy + 5)
+                        it.Picker.BoxIn.Size       = Vector2.new(pw - 2, ph - 2)
+                        it.Picker.BoxFill.Position = Vector2.new(px + 2, iy + 6)
+                        it.Picker.BoxFill.Size     = Vector2.new(pw - 4, ph - 4)
+
+                        it.Picker.BoxX = px
+                        it.Picker.BoxY = iy + 4
+                        it.Picker.BoxW = pw
+                        it.Picker.BoxH = ph
+
+                        it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = true, true, true
+                        rightEdge = px - 6
+                    end
+
                     if it.HasBind and it.BindBtn then
                         local bText = it.Listening and "[ ... ]" or ("[ " .. FormatKeyName(it.BindKey) .. " ]")
                         it.BindBtn.Text = bText
                         local bw = math.max(24, math.floor(it.BindBtn.TextBounds.X))
-                        local bx = ix + iw - bw
+                        local bx = rightEdge - bw
                         it.BindBtn.Position = Vector2.new(bx, iy + 1)
                         it.BindBtnX = bx
                         it.BindBtnY = iy + 1
@@ -588,12 +614,26 @@ function Library:CreateWindow(config)
                 function item:AddSubCheckbox(subLabel, subDefault, subCallback)
                     local sub = {
                         Type = "Checkbox", IsSub = true, Label = subLabel, State = subDefault or false, Height = 18,
-                        Callback = subCallback,
+                        Callback = subCallback, SubItems = {},
                         BoxOut = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
                         BoxIn  = NewDraw("Square", { Size = Vector2.new(8, 8),   Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
                         BoxFill= NewDraw("Square", { Size = Vector2.new(6, 6),   Color = subDefault and Library.Theme.TextActive or Library.Theme.ControlBg, Filled = true, Visible = false, ZIndex = 16 }),
                         Txt    = NewDraw("Text",   { Text = subLabel, Size = 13, Font = Drawing.Fonts.Plex, Color = subDefault and Library.Theme.TextWhite or Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 })
                     }
+
+                    function sub:AddSubColorPicker(defCol, colCallback)
+                        local cVal = defCol or Color3.fromRGB(255, 255, 255)
+                        sub.Picker = {
+                            Type = "ColorPicker",
+                            ColorVal = cVal,
+                            Callback = colCallback,
+                            BoxOut  = NewDraw("Square", { Size = Vector2.new(18, 10), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 17 }),
+                            BoxIn   = NewDraw("Square", { Size = Vector2.new(16, 8),  Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 18 }),
+                            BoxFill = NewDraw("Square", { Size = Vector2.new(14, 6),  Color = cVal, Filled = true, Visible = false, ZIndex = 19 })
+                        }
+                        return sub.Picker
+                    end
+
                     table.insert(item.SubItems, sub)
                     RefreshLayout()
                     return sub
@@ -702,6 +742,13 @@ function Library:CreateWindow(config)
 
     local function HandleItemInteraction(mPos, it)
         if it.Type == "Checkbox" then
+            if it.Picker and it.Picker.BoxX and IsMouseOver(mPos, it.Picker.BoxX - 2, it.Picker.BoxY - 2, it.Picker.BoxW + 4, it.Picker.BoxH + 4) then
+                CloseBindPopup()
+                CloseColorMenuPopup()
+                OpenColorPicker(it.Picker, it.Picker.BoxX + 26, it.Picker.BoxY - 20)
+                return true
+            end
+
             if it.HasBind and it.BindBtnX and IsMouseOver(mPos, it.BindBtnX - 4, it.BindBtnY - 2, it.BindBtnW + 8, it.BindBtnH + 4) then
                 it.Listening = true
                 ListeningBindItem = it
@@ -709,7 +756,8 @@ function Library:CreateWindow(config)
                 return true
             end
 
-            if IsMouseOver(mPos, it.AbsX, it.AbsY - 4, it.AbsW - (it.HasBind and 40 or 0), it.Height + 8) then
+            local clickZoneW = it.AbsW - (it.HasBind and 40 or 0) - (it.Picker and 26 or 0)
+            if IsMouseOver(mPos, it.AbsX, it.AbsY - 4, clickZoneW, it.Height + 8) then
                 it.State = not it.State
                 it.BoxFill.Color = it.State and Library.Theme.TextActive or Library.Theme.ControlBg
                 it.Txt.Color = it.State and Library.Theme.TextWhite or Library.Theme.TextDim
@@ -818,6 +866,21 @@ function Library:CreateWindow(config)
                                 CloseBindPopup()
                                 OpenColorMenuPopup(it, mPos.X + 4, mPos.Y)
                                 return
+                            elseif it.Type == "Checkbox" and it.Picker and it.Picker.BoxX and IsMouseOver(mPos, it.Picker.BoxX - 2, it.Picker.BoxY - 2, it.Picker.BoxW + 4, it.Picker.BoxH + 4) then
+                                CloseColorPicker()
+                                CloseBindPopup()
+                                OpenColorMenuPopup(it.Picker, mPos.X + 4, mPos.Y)
+                                return
+                            end
+                            if it.Type == "Checkbox" and it.State and it.SubItems then
+                                for _, sub in ipairs(it.SubItems) do
+                                    if sub.Picker and sub.Picker.BoxX and IsMouseOver(mPos, sub.Picker.BoxX - 2, sub.Picker.BoxY - 2, sub.Picker.BoxW + 4, sub.Picker.BoxH + 4) then
+                                        CloseColorPicker()
+                                        CloseBindPopup()
+                                        OpenColorMenuPopup(sub.Picker, mPos.X + 4, mPos.Y)
+                                        return
+                                    end
+                                end
                             end
                         end
                     end
