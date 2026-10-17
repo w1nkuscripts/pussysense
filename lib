@@ -87,7 +87,7 @@ function Library:CreateWindow(config)
     end
 
     local topBorderGlow  = CreateHorizontalGlow(35, 1, MenuW - 70, 1, 6)
-    local botBorderGlow  = CreateHorizontalGlow(35, MenuH - 2, MenuW - 70, 1, 6)
+    local botBorderGlow  = CreateHorizontalGlow(35, MenuH - 2, MenuW - 70, 1, 25) -- ZIndex 25 поверх секций
     local mainHeaderGlow = CreateHorizontalGlow(14, 35, MenuW - 28, 1, 6)
     local headerSep = NewDraw("Square", { Position = Vector2.new(MenuX + 14, MenuY + 36), Size = Vector2.new(MenuW - 28, 1), Color = Library.Theme.InnerBorder, Filled = true, Visible = true, ZIndex = 5 })
 
@@ -278,8 +278,9 @@ function Library:CreateWindow(config)
         end
     end
 
+    -- Границы области видимости контента
     local ViewTop = 44
-    local ViewBottom = MenuH - 10
+    local ViewBottom = MenuH - 16 -- Безопасный отступ от нижнего края
     local ColWidth = math.floor((MenuW - 38) / 2)
     local LeftColX = 14
     local RightColX = 14 + ColWidth + 10
@@ -345,7 +346,7 @@ function Library:CreateWindow(config)
         return h
     end
 
-    -- РЕНДЕРИНГ СТОРОНЫ С ПОДДЕРЖКОЙ СКРОЛЛА И КЛИППИНГА
+    -- РЕНДЕРИНГ С ДИНАМИЧЕСКИМ СРЕЗОМ РАМОК СЕКЦИЙ
     local function RenderSide(sideList, scrollOffset)
         local clipTop = MenuY + ViewTop
         local clipBottom = MenuY + ViewBottom
@@ -363,26 +364,30 @@ function Library:CreateWindow(config)
             sec.AbsX, sec.AbsY = absX, absY
             sec.H = secH
 
-            -- Проверка: видна ли секция в области окна
-            local isSecVisible = (absY + secH > clipTop) and (absY < clipBottom)
+            -- Вычисляем реальную видимую высоту рамки секции
+            local renderTop = math.max(absY, clipTop)
+            local renderBottom = math.min(absY + secH, clipBottom)
+            local renderHeight = renderBottom - renderTop
+
+            local isSecVisible = (renderHeight > 6) and (absY < clipBottom) and (absY + secH > clipTop)
 
             if isSecVisible then
-                sec.OutRect.Position = Vector2.new(absX, absY)
-                sec.OutRect.Size     = Vector2.new(sec.W, secH)
-                sec.InRect.Position  = Vector2.new(absX + 1, absY + 1)
-                sec.InRect.Size      = Vector2.new(sec.W - 2, secH - 2)
-                sec.BgRect.Position  = Vector2.new(absX + 2, absY + 2)
-                sec.BgRect.Size      = Vector2.new(sec.W - 4, secH - 4)
+                sec.OutRect.Position = Vector2.new(absX, renderTop)
+                sec.OutRect.Size     = Vector2.new(sec.W, renderHeight)
+                sec.InRect.Position  = Vector2.new(absX + 1, renderTop + 1)
+                sec.InRect.Size      = Vector2.new(sec.W - 2, math.max(0, renderHeight - 2))
+                sec.BgRect.Position  = Vector2.new(absX + 2, renderTop + 2)
+                sec.BgRect.Size      = Vector2.new(sec.W - 4, math.max(0, renderHeight - 4))
 
                 sec.OutRect.Visible, sec.InRect.Visible, sec.BgRect.Visible = true, true, true
 
-                local glowVis = (absY >= clipTop - 5) and (absY <= clipBottom)
+                local glowVis = (absY >= clipTop - 2) and (absY <= clipBottom - 10)
                 for _, g in ipairs(sec.Glow) do
                     g.Obj.Position = Vector2.new(absX + sec.GlowRelOffsetX + g.RelX, absY + 2)
                     g.Obj.Visible = glowVis
                 end
 
-                local titleVis = (absY + 8 >= clipTop) and (absY + 24 <= clipBottom)
+                local titleVis = (absY + 8 >= clipTop) and (absY + 22 <= clipBottom)
                 sec.TitleText.Position = Vector2.new(absX + 10, absY + 8)
                 sec.TitleText.Visible = titleVis
             else
@@ -399,7 +404,8 @@ function Library:CreateWindow(config)
                 it.AbsX, it.AbsY, it.AbsW = ix, iy, iw
 
                 local itemTotalH = it.Height + 4
-                local isItemVisible = isSecVisible and (iy >= clipTop) and (iy + itemTotalH <= clipBottom + 4)
+                -- Строго проверяем, чтобы элемент не выступал за нижний срез
+                local isItemVisible = isSecVisible and (iy >= clipTop) and (iy + itemTotalH <= clipBottom - 2)
 
                 if it.Type == "Checkbox" then
                     if isItemVisible then
@@ -497,7 +503,7 @@ function Library:CreateWindow(config)
                         for oIdx, opt in ipairs(it.OptItems) do
                             if it.Open then
                                 local oy = boxY + 18 + (oIdx - 1) * 16
-                                local isOptVis = (oy >= clipTop) and (oy + 16 <= clipBottom + 10)
+                                local isOptVis = (oy >= clipTop) and (oy + 16 <= clipBottom - 2)
                                 if isOptVis then
                                     opt.AbsX, opt.AbsY, opt.AbsW, opt.AbsH = ix, oy, iw, 16
                                     opt.Out.Position = Vector2.new(ix, oy)
@@ -1033,13 +1039,13 @@ function Library:CreateWindow(config)
         return TabObj
     end
 
-    -- ОБРАБОТЧИК СКРОЛЛА КОЛЕСИКОМ МЫШИ
+    -- СКРОЛЛ КОЛЕСИКОМ МЫШИ
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseWheel then
             local mPos = GetExactMouse()
             local curPage = Window.Pages[Window.ActiveTab]
             if curPage and IsMouseOver(mPos, MenuX, MenuY + ViewTop, MenuW, ViewBottom - ViewTop) then
-                local scrollSpeed = 24
+                local scrollSpeed = 26
                 local delta = -input.Position.Z * scrollSpeed
                 local isRightSide = (mPos.X > MenuX + LeftColX + ColWidth)
 
