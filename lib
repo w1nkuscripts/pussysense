@@ -18,7 +18,7 @@ local Library = {
 
         TextWhite   = Color3.fromRGB(230, 233, 240),
         TextDim     = Color3.fromRGB(130, 135, 148),
-        TextActive  = Color3.fromRGB(130, 180, 255),
+        TextActive  = Color3.fromRGB(242, 160, 210), -- Возвращен розовый акцентный цвет
 
         GlowCore    = Color3.fromRGB(255, 245, 250),
         GlowMid     = Color3.fromRGB(242, 160, 210),
@@ -489,7 +489,7 @@ function Library:CreateWindow(config)
                         local bx = ix + iw - bw
                         it.BindBtn.Position = Vector2.new(bx, iy + 1)
                         it.BindBtnX, it.BindBtnY, it.BindBtnW, it.BindBtnH = bx, iy + 1, bw, 16
-                        it.BindBtn.Color = it.Listening and Library.Theme.TextActive or Library.Theme.TextActive
+                        it.BindBtn.Color = Library.Theme.TextActive
                         it.BindBtn.Visible = true
                     else
                         it.Txt.Visible, it.BindBtn.Visible = false, false
@@ -765,11 +765,13 @@ function Library:CreateWindow(config)
 
     local function RefreshLayout()
         for tabName, p in pairs(Window.Pages) do
-            if tabName ~= Window.ActiveTab then
+            if not Library.MenuOpen or tabName ~= Window.ActiveTab then
                 for _, s in ipairs(p.Left) do HideSection(s) end
                 for _, s in ipairs(p.Right) do HideSection(s) end
             end
         end
+        if not Library.MenuOpen then return end
+
         local curPage = Window.Pages[Window.ActiveTab]
         if curPage then
             local availableH = ViewBottom - ViewTop
