@@ -18,7 +18,7 @@ local Library = {
 
         TextWhite   = Color3.fromRGB(230, 233, 240),
         TextDim     = Color3.fromRGB(130, 135, 148),
-        TextActive  = Color3.fromRGB(242, 160, 210), -- Возвращен розовый акцентный цвет
+        TextActive  = Color3.fromRGB(242, 160, 210), -- Розовый цвет темы
 
         GlowCore    = Color3.fromRGB(255, 245, 250),
         GlowMid     = Color3.fromRGB(242, 160, 210),
@@ -263,7 +263,7 @@ function Library:CreateWindow(config)
 
         for i = 1, maxGlowPool do
             local seg = activeTabGlowSegs[i]
-            if i <= targetW then
+            if i <= targetW and Library.MenuOpen then
                 local p = (targetW > 1) and ((i - 1) / (targetW - 1)) or 0.5
                 local inten = (math.sin(p * math.pi)) ^ 2.0
                 local col = (inten < 0.5)
@@ -307,11 +307,12 @@ function Library:CreateWindow(config)
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.Txt.Visible = false, false, false, false
         elseif it.Type == "ButtonRow" then
             for _, btn in ipairs(it.Buttons) do
+                btn.AbsX = nil
                 btn.BoxOut.Visible, btn.BoxIn.Visible, btn.BoxBg.Visible, btn.Txt.Visible = false, false, false, false
             end
         elseif it.Type == "ScrollList" then
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible = false, false, false
-            for _, row in ipairs(it.Rows) do row.Txt.Visible = false end
+            for _, row in ipairs(it.Rows) do row.AbsX = nil; row.Txt.Visible = false end
         elseif it.Type == "Textbox" then
             it.LblTxt.Visible, it.BoxOut.Visible, it.BoxIn.Visible, it.BoxBg.Visible, it.ValTxt.Visible = false, false, false, false, false
         elseif it.Type == "ColorPicker" then
@@ -1358,6 +1359,7 @@ function Library:CreateWindow(config)
     end)
 
     UserInputService.InputBegan:Connect(function(input)
+        -- Переключение меню
         if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == Library.MenuKey then
             Library.MenuOpen = not Library.MenuOpen
             fOuter.Visible = Library.MenuOpen
@@ -1368,15 +1370,34 @@ function Library:CreateWindow(config)
             headerSep.Visible = Library.MenuOpen
             tLogo1.Visible = Library.MenuOpen
             tLogo2.Visible = Library.MenuOpen
+
             for _, seg in ipairs(topBorderGlow) do seg.Obj.Visible = Library.MenuOpen end
             for _, seg in ipairs(botBorderGlow) do seg.Obj.Visible = Library.MenuOpen end
             for _, seg in ipairs(mainHeaderGlow) do seg.Obj.Visible = Library.MenuOpen end
             for _, tb in ipairs(Window.Tabs) do tb.Item.Visible = Library.MenuOpen end
+
+            -- Прячем/показываем градиентную подсветку под активным табом
+            for _, seg in ipairs(activeTabGlowSegs) do
+                if not Library.MenuOpen then
+                    seg.Obj.Visible = false
+                end
+            end
+
             if not Library.MenuOpen then
                 CloseBindPopup()
                 CloseColorPicker()
                 CloseColorMenuPopup()
+            else
+                if Window.ActiveTab then
+                    for _, t in ipairs(Window.Tabs) do
+                        if t.Name == Window.ActiveTab then
+                            MoveActiveTabGlow(t.Item, t.RelX)
+                            break
+                        end
+                    end
+                end
             end
+
             RefreshLayout()
             return
         end
