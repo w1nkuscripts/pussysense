@@ -52,7 +52,7 @@ function Library:CreateWindow(config)
     local TitleSecond = config.TitleSecond or "Sense"
 
     local MenuX, MenuY = 220, 80
-    local MenuW, MenuH = 580, 480
+    local MenuW, MenuH = 580, 520
 
     local Window = {
         X = MenuX, Y = MenuY, W = MenuW, H = MenuH,
@@ -288,7 +288,9 @@ function Library:CreateWindow(config)
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = false, false, false, false
             if it.BindBtn then it.BindBtn.Visible = false end
             if it.Picker then
-                it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = false, false, false
+                it.Picker.BoxOut.Visible = false
+                it.Picker.BoxIn.Visible = false
+                it.Picker.BoxFill.Visible = false
             end
             if it.SubItems then
                 for _, sub in ipairs(it.SubItems) do HideItem(sub) end
@@ -313,7 +315,9 @@ function Library:CreateWindow(config)
             it.BtnMinusOut.Visible, it.BtnMinusIn.Visible, it.BtnMinusBg.Visible, it.BtnMinusTxt.Visible = false, false, false, false
             it.BtnPlusOut.Visible, it.BtnPlusIn.Visible, it.BtnPlusBg.Visible, it.BtnPlusTxt.Visible = false, false, false, false
             if it.Picker then
-                it.Picker.BoxOut.Visible, it.Picker.BoxIn.Visible, it.Picker.BoxFill.Visible = false, false, false
+                it.Picker.BoxOut.Visible = false
+                it.Picker.BoxIn.Visible = false
+                it.Picker.BoxFill.Visible = false
             end
         end
     end
@@ -761,6 +765,38 @@ function Library:CreateWindow(config)
                         }
                         return sub.Picker
                     end
+
+                    function sub:AddSubSliderWithColorPicker(sLabel, minVal, maxVal, defVal, step, defCol, sCallback, colCallback)
+                        local stepVal = step or 1
+                        local function FormatVal(v) return (stepVal < 1) and string.format("%.2f", v) or tostring(math.floor(v)) end
+                        local cVal = defCol or Color3.fromRGB(255, 255, 255)
+                        local sld = {
+                            Type = "Slider", IsSub = true, Label = sLabel, Min = minVal, Max = maxVal, Val = defVal, Step = stepVal, Format = FormatVal, Height = 30, Callback = sCallback,
+                            Txt    = NewDraw("Text",   { Text = sLabel, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
+                            ValTxt = NewDraw("Text",   { Text = FormatVal(defVal), Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 }),
+                            BarOut = NewDraw("Square", { Size = Vector2.new(82, 8), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                            BarIn  = NewDraw("Square", { Size = Vector2.new(80, 6),  Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 15 }),
+                            BarFill= NewDraw("Square", { Size = Vector2.new(40, 6), Color = Library.Theme.TextActive, Filled = true, Visible = false, ZIndex = 16 }),
+                            BtnMinusOut = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                            BtnMinusIn  = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                            BtnMinusBg  = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                            BtnMinusTxt = NewDraw("Text",   { Text = "-", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 }),
+                            BtnPlusOut  = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                            BtnPlusIn   = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                            BtnPlusBg   = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                            BtnPlusTxt  = NewDraw("Text",   { Text = "+", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 }),
+                            Picker = {
+                                Type = "ColorPicker", ColorVal = cVal, Callback = colCallback,
+                                BoxOut  = NewDraw("Square", { Size = Vector2.new(18, 10), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 17 }),
+                                BoxIn   = NewDraw("Square", { Size = Vector2.new(16, 8),  Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 18 }),
+                                BoxFill = NewDraw("Square", { Size = Vector2.new(14, 6),  Color = cVal, Filled = true, Visible = false, ZIndex = 19 })
+                            }
+                        }
+                        table.insert(sub.SubItems, sld)
+                        RefreshLayout()
+                        return sld
+                    end
+
                     AttachSubBuilders(sub)
                     table.insert(parentItem.SubItems, sub)
                     RefreshLayout()
@@ -786,6 +822,7 @@ function Library:CreateWindow(config)
                         local oTxt = NewDraw("Text",   { Text = optName, Size = 13, Font = Drawing.Fonts.Plex, Color = (optName == dd.Selected) and Library.Theme.TextActive or Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 33 })
                         table.insert(dd.OptItems, { Name = optName, Out = oOut, In = oIn, Bg = oBg, Txt = oTxt })
                     end
+
                     function dd:AddOptionSlider(optionName, sLabel, minVal, maxVal, defVal, step, sCallback)
                         dd.ConditionalSubs[optionName] = dd.ConditionalSubs[optionName] or {}
                         local stepVal = step or 1
@@ -874,68 +911,6 @@ function Library:CreateWindow(config)
                     return item.Picker
                 end
                 AttachSubBuilders(item)
-                table.insert(sec.Items, item)
-                RefreshLayout()
-                return item
-            end
-
-            function SecObj:AddDropdown(label, options, defaultSelected, callback)
-                local item = {
-                    Type = "Dropdown", Label = label, Options = options or {}, Selected = defaultSelected or options[1] or "",
-                    Open = false, Height = 36, Callback = callback,
-                    LblTxt  = NewDraw("Text",   { Text = label, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
-                    BoxOut  = NewDraw("Square", { Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
-                    BoxIn   = NewDraw("Square", { Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
-                    BoxBg   = NewDraw("Square", { Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
-                    ValTxt  = NewDraw("Text",   { Text = defaultSelected or options[1] or "", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
-                    ArrowTxt= NewDraw("Text",   { Text = "v", Size = 12, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 }),
-                    OptItems = {}
-                }
-                for _, optName in ipairs(options) do
-                    local oOut = NewDraw("Square", { Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 30 })
-                    local oIn  = NewDraw("Square", { Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 31 })
-                    local oBg  = NewDraw("Square", { Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 32 })
-                    local oTxt = NewDraw("Text",   { Text = optName, Size = 13, Font = Drawing.Fonts.Plex, Color = (optName == item.Selected) and Library.Theme.TextActive or Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 33 })
-                    table.insert(item.OptItems, { Name = optName, Out = oOut, In = oIn, Bg = oBg, Txt = oTxt })
-                end
-                table.insert(sec.Items, item)
-                RefreshLayout()
-                return item
-            end
-
-            function SecObj:AddSlider(label, minVal, maxVal, defVal, step, callback)
-                step = step or 1
-                local function FormatVal(v) return (step < 1) and string.format("%.2f", v) or tostring(math.floor(v)) end
-                local item = {
-                    Type = "Slider", Label = label, Min = minVal, Max = maxVal, Val = defVal, Step = step, Format = FormatVal, Height = 32, Callback = callback,
-                    Txt    = NewDraw("Text",   { Text = label, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
-                    ValTxt = NewDraw("Text",   { Text = FormatVal(defVal), Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 }),
-                    BarOut = NewDraw("Square", { Size = Vector2.new(82, 8), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
-                    BarIn  = NewDraw("Square", { Size = Vector2.new(80, 6),  Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 15 }),
-                    BarFill= NewDraw("Square", { Size = Vector2.new(40, 6), Color = Library.Theme.TextActive, Filled = true, Visible = false, ZIndex = 16 }),
-                    BtnMinusOut = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
-                    BtnMinusIn  = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
-                    BtnMinusBg  = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
-                    BtnMinusTxt = NewDraw("Text",   { Text = "-", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 }),
-                    BtnPlusOut  = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
-                    BtnPlusIn   = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
-                    BtnPlusBg   = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
-                    BtnPlusTxt  = NewDraw("Text",   { Text = "+", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 })
-                }
-                table.insert(sec.Items, item)
-                RefreshLayout()
-                return item
-            end
-
-            function SecObj:AddColorPicker(label, defaultColor, callback)
-                local col = defaultColor or Color3.fromRGB(255, 255, 255)
-                local item = {
-                    Type = "ColorPicker", Label = label, ColorVal = col, Height = 22, Callback = callback,
-                    Txt     = NewDraw("Text",   { Text = label, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
-                    BoxOut  = NewDraw("Square", { Size = Vector2.new(20, 12), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
-                    BoxIn   = NewDraw("Square", { Size = Vector2.new(18, 10), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
-                    BoxFill = NewDraw("Square", { Size = Vector2.new(16, 8),  Color = col, Filled = true, Visible = false, ZIndex = 16 })
-                }
                 table.insert(sec.Items, item)
                 RefreshLayout()
                 return item
