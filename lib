@@ -67,7 +67,6 @@ function Library:CreateWindow(config)
         TabButtons = {}
     }
 
-    -- Рамки окна
     local fOuter = NewDraw("Square", { Size = Vector2.new(MenuW, MenuH), Position = Vector2.new(MenuX, MenuY), Color = Library.Theme.OuterBorder, Filled = true, Visible = true, ZIndex = 1 })
     local fMid   = NewDraw("Square", { Size = Vector2.new(MenuW - 2, MenuH - 2), Position = Vector2.new(MenuX + 1, MenuY + 1), Color = Library.Theme.MidBorder, Filled = true, Visible = true, ZIndex = 2 })
     local fGap   = NewDraw("Square", { Size = Vector2.new(MenuW - 4, MenuH - 4), Position = Vector2.new(MenuX + 2, MenuY + 2), Color = Library.Theme.GapBg, Filled = true, Visible = true, ZIndex = 3 })
@@ -107,7 +106,6 @@ function Library:CreateWindow(config)
     local lw1 = math.max(38, math.floor(tLogo1.TextBounds.X) + 1)
     local tLogo2 = NewDraw("Text", { Text = TitleSecond, Position = Vector2.new(MenuX + 18 + lw1, MenuY + 14), Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextActive, Outline = true, OutlineColor = Color3.new(0,0,0), Visible = true, ZIndex = 7 })
 
-    -- Поп-ап биндов (ПКМ)
     local BindPopup = {
         Visible = false, X = 0, Y = 0, W = 88, H = 76, TargetBind = nil,
         Modes = { "toggle", "hold", "always on", "always off" },
@@ -146,7 +144,6 @@ function Library:CreateWindow(config)
         for _, row in ipairs(BindPopup.Rows) do row.TextObj.Visible = false end
     end
 
-    -- Поп-ап Copy / Paste цвета (ПКМ)
     local ColorMenuPopup = {
         Visible = false, X = 0, Y = 0, W = 60, H = 38, TargetColorItem = nil,
         OutBorder = NewDraw("Square", { Size = Vector2.new(60, 38), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 70 }),
@@ -179,7 +176,6 @@ function Library:CreateWindow(config)
         ColorMenuPopup.CopyTxt.Visible, ColorMenuPopup.PasteTxt.Visible = false, false
     end
 
-    -- Окно палитры HSV (ЛКМ)
     local ColorPickerWin = {
         Visible = false, X = 0, Y = 0, W = 160, H = 140, TargetColorItem = nil,
         H_Val = 0.5, S_Val = 0.5, V_Val = 1.0, DraggingSV = false, DraggingH = false,
@@ -259,7 +255,6 @@ function Library:CreateWindow(config)
         ColorPickerWin.SVCursor.Visible, ColorPickerWin.HueCursor.Visible = false, false
     end
 
-    -- Градиент активного таба
     local maxGlowPool = 200
     local activeTabGlowSegs = {}
     for i = 1, maxGlowPool do
@@ -303,6 +298,9 @@ function Library:CreateWindow(config)
         if it.Type == "Checkbox" then
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = false, false, false, false
             if it.BindBtn then it.BindBtn.Visible = false end
+            if it.SubItems then
+                for _, sub in ipairs(it.SubItems) do HideItem(sub) end
+            end
         elseif it.Type == "ColorPicker" then
             it.Txt.Visible = false
             it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible = false, false, false
@@ -330,7 +328,14 @@ function Library:CreateWindow(config)
         local curY = ViewTop
         for _, sec in ipairs(sideList) do
             local secH = 28
-            for _, it in ipairs(sec.Items) do secH = secH + it.Height + 4 end
+            for _, it in ipairs(sec.Items) do
+                secH = secH + it.Height + 4
+                if it.Type == "Checkbox" and it.State and it.SubItems then
+                    for _, sub in ipairs(it.SubItems) do
+                        secH = secH + sub.Height + 4
+                    end
+                end
+            end
             secH = secH + 6
 
             local absX = MenuX + sec.RelX
@@ -356,17 +361,23 @@ function Library:CreateWindow(config)
             sec.TitleText.Visible = true
 
             local itemY = absY + 28
-            for _, it in ipairs(sec.Items) do
-                local ix = absX + 10
+
+            local function DrawSingleItem(it, indent)
+                local ix = absX + 10 + indent
                 local iy = itemY
-                local iw = sec.W - 20
+                local iw = sec.W - 20 - indent
                 it.AbsX, it.AbsY, it.AbsW = ix, iy, iw
 
                 if it.Type == "Checkbox" then
+                    local bSz = it.IsSub and 10 or 12
                     it.BoxOut.Position  = Vector2.new(ix, iy + 3)
+                    it.BoxOut.Size      = Vector2.new(bSz, bSz)
                     it.BoxIn.Position   = Vector2.new(ix + 1, iy + 4)
+                    it.BoxIn.Size       = Vector2.new(bSz - 2, bSz - 2)
                     it.BoxFill.Position = Vector2.new(ix + 2, iy + 5)
-                    it.Txt.Position     = Vector2.new(ix + 18, iy + 1)
+                    it.BoxFill.Size     = Vector2.new(bSz - 4, bSz - 4)
+
+                    it.Txt.Position     = Vector2.new(ix + bSz + 6, iy + 1)
                     it.BoxOut.Visible, it.BoxIn.Visible, it.BoxFill.Visible, it.Txt.Visible = true, true, true, true
 
                     if it.HasBind and it.BindBtn then
@@ -458,6 +469,21 @@ function Library:CreateWindow(config)
                 end
                 itemY = itemY + it.Height + 4
             end
+
+            for _, it in ipairs(sec.Items) do
+                DrawSingleItem(it, 0)
+                if it.Type == "Checkbox" then
+                    if it.State and it.SubItems then
+                        for _, sub in ipairs(it.SubItems) do
+                            DrawSingleItem(sub, 12)
+                        end
+                    elseif it.SubItems then
+                        for _, sub in ipairs(it.SubItems) do
+                            HideItem(sub)
+                        end
+                    end
+                end
+            end
             curY = curY + secH + 8
         end
     end
@@ -544,11 +570,12 @@ function Library:CreateWindow(config)
             table.insert(Window.Pages[tabName][targetSide], sec)
 
             local SecObj = {}
+
             function SecObj:AddCheckbox(label, defaultState, callback, hasBind, defaultKey, defaultMode)
                 local item = {
                     Type = "Checkbox", Label = label, State = defaultState or false, Height = 22,
                     HasBind = hasBind or false, BindKey = defaultKey or nil, BindMode = defaultMode or "toggle",
-                    Listening = false, Callback = callback,
+                    Listening = false, Callback = callback, SubItems = {},
                     BoxOut = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
                     BoxIn  = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
                     BoxFill= NewDraw("Square", { Size = Vector2.new(8, 8),   Color = defaultState and Library.Theme.TextActive or Library.Theme.ControlBg, Filled = true, Visible = false, ZIndex = 16 }),
@@ -557,6 +584,45 @@ function Library:CreateWindow(config)
                 if hasBind then
                     item.BindBtn = NewDraw("Text", { Text = "[ " .. FormatKeyName(item.BindKey) .. " ]", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextDim, Outline = true, OutlineColor = Color3.new(0, 0, 0), Visible = false, ZIndex = 18 })
                 end
+
+                function item:AddSubCheckbox(subLabel, subDefault, subCallback)
+                    local sub = {
+                        Type = "Checkbox", IsSub = true, Label = subLabel, State = subDefault or false, Height = 18,
+                        Callback = subCallback,
+                        BoxOut = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                        BoxIn  = NewDraw("Square", { Size = Vector2.new(8, 8),   Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                        BoxFill= NewDraw("Square", { Size = Vector2.new(6, 6),   Color = subDefault and Library.Theme.TextActive or Library.Theme.ControlBg, Filled = true, Visible = false, ZIndex = 16 }),
+                        Txt    = NewDraw("Text",   { Text = subLabel, Size = 13, Font = Drawing.Fonts.Plex, Color = subDefault and Library.Theme.TextWhite or Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 })
+                    }
+                    table.insert(item.SubItems, sub)
+                    RefreshLayout()
+                    return sub
+                end
+
+                function item:AddSubSlider(subLabel, minVal, maxVal, defVal, step, subCallback)
+                    step = step or 1
+                    local function FormatVal(v) return (step < 1) and string.format("%.2f", v) or tostring(math.floor(v)) end
+                    local sub = {
+                        Type = "Slider", IsSub = true, Label = subLabel, Min = minVal, Max = maxVal, Val = defVal, Step = step, Format = FormatVal, Height = 30, Callback = subCallback,
+                        Txt    = NewDraw("Text",   { Text = subLabel, Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Outline = true, Visible = false, ZIndex = 17 }),
+                        ValTxt = NewDraw("Text",   { Text = FormatVal(defVal), Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextDim, Outline = true, Visible = false, ZIndex = 17 }),
+                        BarOut = NewDraw("Square", { Size = Vector2.new(82, 8), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                        BarIn  = NewDraw("Square", { Size = Vector2.new(80, 6),  Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 15 }),
+                        BarFill= NewDraw("Square", { Size = Vector2.new(40, 6), Color = Library.Theme.TextActive, Filled = true, Visible = false, ZIndex = 16 }),
+                        BtnMinusOut = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                        BtnMinusIn  = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                        BtnMinusBg  = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                        BtnMinusTxt = NewDraw("Text",   { Text = "-", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 }),
+                        BtnPlusOut  = NewDraw("Square", { Size = Vector2.new(14, 14), Color = Library.Theme.OuterBorder, Filled = true, Visible = false, ZIndex = 14 }),
+                        BtnPlusIn   = NewDraw("Square", { Size = Vector2.new(12, 12), Color = Library.Theme.InnerBorder, Filled = true, Visible = false, ZIndex = 15 }),
+                        BtnPlusBg   = NewDraw("Square", { Size = Vector2.new(10, 10), Color = Library.Theme.ControlBg,   Filled = true, Visible = false, ZIndex = 16 }),
+                        BtnPlusTxt  = NewDraw("Text",   { Text = "+", Size = 13, Font = Drawing.Fonts.Plex, Color = Library.Theme.TextWhite, Center = true, Outline = true, Visible = false, ZIndex = 20 })
+                    }
+                    table.insert(item.SubItems, sub)
+                    RefreshLayout()
+                    return sub
+                end
+
                 table.insert(sec.Items, item)
                 RefreshLayout()
                 return item
@@ -629,11 +695,61 @@ function Library:CreateWindow(config)
         return TabObj
     end
 
-    -- Обработка перетаскивания и кликов
     local isDragging = false
     local dragOffset = Vector2.new(0, 0)
     local ActiveSlider = nil
     local ListeningBindItem = nil
+
+    local function HandleItemInteraction(mPos, it)
+        if it.Type == "Checkbox" then
+            if it.HasBind and it.BindBtnX and IsMouseOver(mPos, it.BindBtnX - 4, it.BindBtnY - 2, it.BindBtnW + 8, it.BindBtnH + 4) then
+                it.Listening = true
+                ListeningBindItem = it
+                RefreshLayout()
+                return true
+            end
+
+            if IsMouseOver(mPos, it.AbsX, it.AbsY - 4, it.AbsW - (it.HasBind and 40 or 0), it.Height + 8) then
+                it.State = not it.State
+                it.BoxFill.Color = it.State and Library.Theme.TextActive or Library.Theme.ControlBg
+                it.Txt.Color = it.State and Library.Theme.TextWhite or Library.Theme.TextDim
+                if it.Callback then it.Callback(it.State) end
+                RefreshLayout()
+                return true
+            end
+        elseif it.Type == "ColorPicker" then
+            if it.BoxX and IsMouseOver(mPos, it.BoxX - 2, it.BoxY - 2, it.BoxW + 4, it.BoxH + 4) then
+                CloseBindPopup()
+                CloseColorMenuPopup()
+                OpenColorPicker(it, it.BoxX + 28, it.BoxY - 20)
+                return true
+            end
+        elseif it.Type == "Dropdown" then
+            if IsMouseOver(mPos, it.AbsX, it.AbsY + 14, it.AbsW, 20) then
+                it.Open = not it.Open
+                RefreshLayout()
+                return true
+            end
+        elseif it.Type == "Slider" then
+            if IsMouseOver(mPos, it.AbsX, it.AbsY + 10, 18, 18) then
+                it.Val = math.clamp(it.Val - it.Step, it.Min, it.Max)
+                it.ValTxt.Text = it.Format(it.Val)
+                if it.Callback then it.Callback(it.Val) end
+                RefreshLayout()
+                return true
+            elseif IsMouseOver(mPos, it.AbsX + it.AbsW - 18, it.AbsY + 10, 18, 18) then
+                it.Val = math.clamp(it.Val + it.Step, it.Min, it.Max)
+                it.ValTxt.Text = it.Format(it.Val)
+                if it.Callback then it.Callback(it.Val) end
+                RefreshLayout()
+                return true
+            elseif IsMouseOver(mPos, it.AbsX + 16, it.AbsY + 10, it.AbsW - 32, 18) then
+                ActiveSlider = it
+                return true
+            end
+        end
+        return false
+    end
 
     UserInputService.InputBegan:Connect(function(input)
         if ListeningBindItem then
@@ -670,11 +786,13 @@ function Library:CreateWindow(config)
                                     it.BoxFill.Color = it.State and Library.Theme.TextActive or Library.Theme.ControlBg
                                     it.Txt.Color = it.State and Library.Theme.TextWhite or Library.Theme.TextDim
                                     if it.Callback then it.Callback(it.State) end
+                                    RefreshLayout()
                                 elseif it.BindMode == "hold" then
                                     it.State = true
                                     it.BoxFill.Color = Library.Theme.TextActive
                                     it.Txt.Color = Library.Theme.TextWhite
                                     if it.Callback then it.Callback(true) end
+                                    RefreshLayout()
                                 end
                             end
                         end
@@ -683,7 +801,6 @@ function Library:CreateWindow(config)
             end
         end
 
-        -- ПКМ
         if input.UserInputType == Enum.UserInputType.MouseButton2 then
             local mPos = GetExactMouse()
             local curPage = Window.Pages[Window.ActiveTab]
@@ -708,7 +825,6 @@ function Library:CreateWindow(config)
             end
         end
 
-        -- ЛКМ
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             local mPos = GetExactMouse()
 
@@ -784,7 +900,6 @@ function Library:CreateWindow(config)
                 end
             end
 
-            -- Выпадающие списки
             local curPage = Window.Pages[Window.ActiveTab]
             if curPage then
                 for _, sideList in ipairs({ curPage.Left, curPage.Right }) do
@@ -809,7 +924,6 @@ function Library:CreateWindow(config)
                 end
             end
 
-            -- Вкладки
             for _, tb in ipairs(Window.Tabs) do
                 local bx = MenuX + tb.RelX - 12
                 local by = MenuY + tb.RelY - 8
@@ -831,54 +945,14 @@ function Library:CreateWindow(config)
                 end
             end
 
-            -- Элементы секции
             if curPage then
                 for _, sideList in ipairs({ curPage.Left, curPage.Right }) do
                     for _, sec in ipairs(sideList) do
                         for _, it in ipairs(sec.Items) do
-                            if it.Type == "Checkbox" then
-                                if it.HasBind and it.BindBtnX and IsMouseOver(mPos, it.BindBtnX - 4, it.BindBtnY - 2, it.BindBtnW + 8, it.BindBtnH + 4) then
-                                    it.Listening = true
-                                    ListeningBindItem = it
-                                    RefreshLayout()
-                                    return
-                                end
-                                if IsMouseOver(mPos, it.AbsX, it.AbsY - 4, it.AbsW - 40, it.Height + 8) then
-                                    it.State = not it.State
-                                    it.BoxFill.Color = it.State and Library.Theme.TextActive or Library.Theme.ControlBg
-                                    it.Txt.Color = it.State and Library.Theme.TextWhite or Library.Theme.TextDim
-                                    if it.Callback then it.Callback(it.State) end
-                                    return
-                                end
-                            elseif it.Type == "ColorPicker" then
-                                if it.BoxX and IsMouseOver(mPos, it.BoxX - 2, it.BoxY - 2, it.BoxW + 4, it.BoxH + 4) then
-                                    CloseBindPopup()
-                                    CloseColorMenuPopup()
-                                    OpenColorPicker(it, it.BoxX + 28, it.BoxY - 20)
-                                    return
-                                end
-                            elseif it.Type == "Dropdown" then
-                                if IsMouseOver(mPos, it.AbsX, it.AbsY + 14, it.AbsW, 20) then
-                                    it.Open = not it.Open
-                                    RefreshLayout()
-                                    return
-                                end
-                            elseif it.Type == "Slider" then
-                                if IsMouseOver(mPos, it.AbsX, it.AbsY + 10, 18, 18) then
-                                    it.Val = math.clamp(it.Val - it.Step, it.Min, it.Max)
-                                    it.ValTxt.Text = it.Format(it.Val)
-                                    if it.Callback then it.Callback(it.Val) end
-                                    RefreshLayout()
-                                    return
-                                elseif IsMouseOver(mPos, it.AbsX + it.AbsW - 18, it.AbsY + 10, 18, 18) then
-                                    it.Val = math.clamp(it.Val + it.Step, it.Min, it.Max)
-                                    it.ValTxt.Text = it.Format(it.Val)
-                                    if it.Callback then it.Callback(it.Val) end
-                                    RefreshLayout()
-                                    return
-                                elseif IsMouseOver(mPos, it.AbsX + 16, it.AbsY + 10, it.AbsW - 32, 18) then
-                                    ActiveSlider = it
-                                    return
+                            if HandleItemInteraction(mPos, it) then return end
+                            if it.Type == "Checkbox" and it.State and it.SubItems then
+                                for _, sub in ipairs(it.SubItems) do
+                                    if HandleItemInteraction(mPos, sub) then return end
                                 end
                             end
                         end
@@ -886,7 +960,6 @@ function Library:CreateWindow(config)
                 end
             end
 
-            -- Драг окна
             if IsMouseOver(mPos, MenuX, MenuY, MenuW, 36) then
                 isDragging = true
                 dragOffset = Vector2.new(mPos.X - MenuX, mPos.Y - MenuY)
@@ -920,6 +993,7 @@ function Library:CreateWindow(config)
                                     it.BoxFill.Color = Library.Theme.ControlBg
                                     it.Txt.Color = Library.Theme.TextDim
                                     if it.Callback then it.Callback(false) end
+                                    RefreshLayout()
                                 end
                             end
                         end
